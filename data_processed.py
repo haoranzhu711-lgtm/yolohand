@@ -61,7 +61,7 @@ def load_annotations_from_file(data_txt_path: Path) -> dict:
             image_filename = Path(parts[0]).name
             try:
                 data = [float(p) for p in parts[1:]]
-                if len(data) >= 4:
+                if len(data) >= 4: # 至少需要 bbox (x, y, h, w)
                     annotations[image_filename] = data
                 else:
                     print(f"警告：标注行格式错误（数据不足）：{line} @ {data_txt_path}")
@@ -81,7 +81,7 @@ def convert_to_yolo(img_width: int, img_height: int, bbox: list, keypoints: list
     # YOLO 格式：center_x_norm, center_y_norm, width_norm, height_norm
     x_min, y_min, box_h, box_w = bbox
     
-    # 确保h和w是正数
+    # 健壮性检查：确保h和w是正数
     if box_w <= 0 or box_h <= 0:
         raise ValueError(f"Bounding box 尺寸无效: w={box_w}, h={box_h}")
 
@@ -130,7 +130,7 @@ def create_yolo_dataset():
 
     # 1. 创建输出目录结构
     train_img_dir = output_dir / "images" / "train"
-    val_img_dir = output_dir / "images" / "val"
+    val_img_dir = output_dir / "images" / "val" # YOLO 常用 'val' 作为测试集
     train_label_dir = output_dir / "labels" / "train"
     val_label_dir = output_dir / "labels" / "val"
     
@@ -145,13 +145,13 @@ def create_yolo_dataset():
         return
         
     with open(main_list_path, 'r', encoding='utf-8') as f:
-        # 使用 Path(line.strip()).as_posix() 来标准化路径分隔符
+        # 使用 Path(line.strip()).as_posix() 来标准化路径分隔符 (统一为 '/')
         target_image_paths = [Path(line.strip()).as_posix() for line in f if line.strip()]
         
     print(f"从主列表加载了 {len(target_image_paths)} 个目标图片。")
 
     # 3. 准备一个缓存来存储已加载的 data.txt 内容
-    #    键: data.txt 的绝对路径
+    #    键: data.txt 的绝对路径 (str)
     #    值: { 'img1.jpg': [data...], 'img2.jpg': [data...] }
     annotation_cache = {}
 
@@ -170,6 +170,7 @@ def create_yolo_dataset():
         source_folder_index = -1
         
         for i, source_root in enumerate(source_folder_paths):
+            # 使用 os.path.join 或 Pathlib 的 / 运算符来拼接
             test_path = source_root / relative_path
             if test_path.exists():
                 full_img_path = test_path
@@ -191,7 +192,7 @@ def create_yolo_dataset():
         
         # 4.3 从缓存加载或读取 data.txt
         if data_txt_path_str not in annotation_cache:
-            # print(f"加载新的标注文件：{data_txt_path_str}")
+            # 仅在第一次遇到时加载
             annotation_cache[data_txt_path_str] = load_annotations_from_file(data_txt_path)
             if not annotation_cache[data_txt_path_str]:
                 print(f"警告：标注文件为空或不存在：{data_txt_path_str}")
